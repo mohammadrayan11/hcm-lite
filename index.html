@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HCM Lite</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="style.css"></head><body>
+
+<section id="login">
+ <div class="brand">
+  <div><h1>HCM Lite</h1><p>People, attendance, leave and payroll for one small team. Sign in with your work email to open your own panel.</p></div>
+  <div class="roles" id="roles"></div>
+</div>
+ <div class="formside"><form class="formbox" id="lf">
+  <h2>Sign in</h2><span class="mode" id="mode"></span>
+  <label for="em">Email</label><i
+  nput id="em" type="email" required autocomplete="username" placeholder="you@company.com">
+  <label for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
+  <button class="btn full" id="lb">Sign in</button><div class="err" id="err" role="alert"></div>
+ </form></div>
+</section>
+
+<div id="app" class="hidden">
+ <aside><div class="logo">HCM Lite</div><div class="badge" id="badge"></div><nav id="nav" style="display:contents"></nav><a class="out" onclick="logout()">Sign out</a></aside>
+ <main id="main"></main>
+</div>
+<div id="toast"></div>
+
+<script src="script.js"></script>
+</body></html>
