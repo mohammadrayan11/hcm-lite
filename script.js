@@ -196,7 +196,7 @@ async function finalize(){const m=$('pm').value;if(!confirm('Finalize '+m+'? It 
  if(sb){const{data}=await sb.auth.getSession();const em=data.session?.user?.email;if(em)enter({email:em,role:CFG.roles[em]||'employee'})}
  else{try{const s=JSON.parse(localStorage.getItem('hcm_session'));if(s)enter(s)}catch{}}
 })();
-const Cfg={
+const cfg={
   url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',
   key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',
   roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}
