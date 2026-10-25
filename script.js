@@ -4,9 +4,9 @@ const sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.k
 
 /* ===== storage: Supabase table hcm_kv(k text primary key, v jsonb) or localStorage ===== */
 const store={
- async get(k,d){ if(sb){const{data}=await sb.from('hcm_kv').select('v').eq('k',k).maybeSingle();return data?data.v:d}
+ async get(k,d){ if(sb){try{const{data,error}=await sb.from('hcm_kv').select('v').eq('k',k).maybeSingle();if(error)throw error;return data?data.v:d}catch(x){if(!store.warned){store.warned=1;setTimeout(()=>toast('Supabase read failed: '+(x.message||x)),300)}return d}}
   try{return JSON.parse(localStorage.getItem('hcm_'+k))??d}catch{return d} },
- async set(k,v){ if(sb){await sb.from('hcm_kv').upsert({k,v})}else localStorage.setItem('hcm_'+k,JSON.stringify(v)) }
+ async set(k,v){ if(sb){try{const{error}=await sb.from('hcm_kv').upsert({k,v});if(error)throw error}catch(x){toast('Supabase save failed: '+(x.message||x))}}else localStorage.setItem('hcm_'+k,JSON.stringify(v)) }
 };
 const S={employees:[],attendance:[],leaves:[],notes:[],payroll:[]};
 const save=k=>store.set(k,S[k]);
@@ -49,7 +49,7 @@ async function doSignup(name,email,pw,role){
 }
 async function enter(user){
  me=user;sessionStorage.setItem('hcm_session',JSON.stringify(user));
- for(const k of Object.keys(S))S[k]=await store.get(k,[]);
+ for(const k of Object.keys(S)){S[k]=await store.get(k,[]);if(!Array.isArray(S[k]))S[k]=[]}
  if(!S.employees.length)await seedDemo();
  if(me.role==='employee'&&!S.employees.some(e=>e.email===me.email)){S.employees.push({id:uid(),code:'EMP-'+String(S.employees.length+1).padStart(3,'0'),name:me.name||me.email.split('@')[0],email:me.email,dept:'General',designation:'Staff',basic:40000,joined:today()});await save('employees')}
  page='dash';$('login').classList.add('hidden');$('app').classList.remove('hidden');
@@ -75,7 +75,8 @@ const NAV={hr:[['dash','Dashboard'],['emp','Employees'],['att','Attendance'],['l
  employee:[['dash','My day'],['att','My attendance'],['leave','My leave'],['slip','Payslip'],['news','Announcements']]};
 function draw(){
  $('nav').innerHTML=NAV[me.role].map(n=>`<a class="${n[0]===page?'on':''}" onclick="go('${n[0]}')">${n[1]}</a>`).join('');
- const fn=PAGES[page]||PAGES.dash;$('main').innerHTML=fn();
+ const fn=PAGES[page]||PAGES.dash;
+ try{$('main').innerHTML=fn()}catch(x){console.error(x);$('main').innerHTML='<div class="card"><h3>This page could not open</h3><p class="sub">'+esc(x.message)+'</p><div class="actions"><button class="btn" onclick="go(\'dash\')">Go to dashboard</button></div></div>'}
 }
 const go=p=>{page=p;draw()};
 const head=(t,s)=>`<h2>${t}</h2><p class="sub">${s}</p>`;
