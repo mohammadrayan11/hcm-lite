@@ -32,7 +32,8 @@ const seed={'hr@hcm.com':{pw:'123456',role:'hr'},'manager@hcm.com':{pw:'123456',
 const roleOf=u=>{const r=u.user_metadata?.role;return['hr','manager','employee'].includes(r)?r:(CFG.roles[u.email]||'employee')};
 async function doLogin(email,pw){
  email=email.trim().toLowerCase();
- if(sb){const{data,error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw error;
+ if(sb){const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error)throw new Error((error.message||'').toLowerCase().includes('not confirmed')?'Email not confirmed. In Supabase turn OFF "Confirm email" (Authentication > Sign In / Providers > Email), then delete this user and create the account again.':error.message);
   return{email,role:roleOf(data.user),name:data.user.user_metadata?.name}}
  let u=await store.get('users',null);if(!u){u=seed;await store.set('users',u)}
  if(!u[email]||u[email].pw!==pw)throw new Error('Wrong email or password.');
@@ -41,8 +42,22 @@ async function doLogin(email,pw){
 async function doSignup(name,email,pw,role){
  email=email.trim().toLowerCase();name=name.trim();
  if(pw.length<6)throw new Error('Password must be at least 6 characters.');
- if(sb){const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,role}}});if(error)throw error;
-  if(!data.session)return{confirm:true};return{email,role,name}}
+ if(sb){
+  const asUser=u=>({email,role:roleOf(u),name:u.user_metadata?.name||name});
+  const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,role}}});
+  if(error){
+   const m=(error.message||'').toLowerCase();
+   if(m.includes('already')||m.includes('rate limit')){
+    const r=await sb.auth.signInWithPassword({email,password:pw});
+    if(!r.error)return asUser(r.data.user);
+    if(m.includes('rate limit'))throw new Error('Supabase email limit reached. Open Supabase > Authentication > Sign In / Providers > Email, turn OFF "Confirm email", then try again.');
+    throw new Error('This email already has an account. Use Sign in with your password.');
+   }
+   throw error;
+  }
+  if(!data.session){const r=await sb.auth.signInWithPassword({email,password:pw});if(!r.error)return asUser(r.data.user);return{confirm:true}}
+  return{email,role,name};
+ }
  const u=(await store.get('users',null))||seed;
  if(u[email])throw new Error('This email already has an account. Please sign in.');
  u[email]={pw,role,name};await store.set('users',u);return{email,role,name};
