@@ -61,3 +61,7 @@ th{color:var(--mut);font-weight:700;font-size:13px}
 #toast.show{opacity:1;transform:none}
 @media(max-width:800px){#login{grid-template-columns:1fr}.brand{padding:32px;gap:28px}.brand h1{font-size:40px}#app{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:12px}aside .logo,aside .badge{margin:0}aside .out{margin:0}main{padding:20px 16px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.tabs{display:flex;background:#e8eef5;border-radius:12px;padding:4px;margin-bottom:6px}
+.tabs button{flex:1;border:0;background:none;padding:9px;border-radius:9px;font-weight:700;color:var(--mut);cursor:pointer}
+.tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(20,32,46,.12)}
