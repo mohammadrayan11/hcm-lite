@@ -1,6 +1,7 @@
 /* ===== CONFIG: paste Supabase URL + anon key to switch from localStorage to Supabase ===== */
-const CFG={url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}};
-const sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.key,{auth:{storage:window.sessionStorage}}):null;
+/* openAny:true = any email/password (even dummy) opens the panel. Set false for strict login. */
+const CFG={openAny:true,url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}};
+let sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.key,{auth:{storage:window.sessionStorage}}):null;
 
 /* ===== storage: Supabase table hcm_kv(k text primary key, v jsonb) or localStorage ===== */
 const store={
@@ -30,39 +31,49 @@ function used(eid,t){return S.leaves.filter(l=>l.eid===eid&&l.type===t&&l.status
 /* ===== auth: 3 emails -> 3 panels ===== */
 const seed={'hr@hcm.com':{pw:'123456',role:'hr'},'manager@hcm.com':{pw:'123456',role:'manager'},'employee@hcm.com':{pw:'123456',role:'employee'}};
 const roleOf=u=>{const r=u.user_metadata?.role;return['hr','manager','employee'].includes(r)?r:(CFG.roles[u.email]||'employee')};
+/* accounts kept in this browser: always works, even if Supabase is down or rate limited */
+const LU={get(){try{return JSON.parse(localStorage.getItem('hcm_users'))||{...seed}}catch{return{...seed}}},set(u){localStorage.setItem('hcm_users',JSON.stringify(u))}};
+function localUser(email,pw){const u=LU.get()[email];return u&&u.pw===pw?{email,role:u.role,name:u.name}:null}
 async function doLogin(email,pw){
  email=email.trim().toLowerCase();
- if(sb){const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
-  if(error)throw new Error((error.message||'').toLowerCase().includes('not confirmed')?'Email not confirmed. In Supabase turn OFF "Confirm email" (Authentication > Sign In / Providers > Email), then delete this user and create the account again.':error.message);
-  return{email,role:roleOf(data.user),name:data.user.user_metadata?.name}}
- let u=await store.get('users',null);if(!u){u=seed;await store.set('users',u)}
- if(!u[email]||u[email].pw!==pw)throw new Error('Wrong email or password.');
- return{email,role:u[email].role,name:u[email].name};
+ if(sb){
+  let r;try{r=await sb.auth.signInWithPassword({email,password:pw})}catch(x){r={error:x}}
+  if(!r.error)return{email,role:roleOf(r.data.user),name:r.data.user.user_metadata?.name};
+  const l=localUser(email,pw);if(l){sb=null;return l}
+  throw new Error((r.error.message||'').toLowerCase().includes('not confirmed')?'Email not confirmed. Create the account again, it will open directly.':'Wrong email or password.');
+ }
+ const l=localUser(email,pw);if(!l)throw new Error('Wrong email or password.');return l;
 }
 async function doSignup(name,email,pw,role){
  email=email.trim().toLowerCase();name=name.trim();
  if(pw.length<6)throw new Error('Password must be at least 6 characters.');
  if(sb){
-  const asUser=u=>({email,role:roleOf(u),name:u.user_metadata?.name||name});
-  const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,role}}});
-  if(error){
-   const m=(error.message||'').toLowerCase();
-   if(m.includes('already')||m.includes('rate limit')){
-    const r=await sb.auth.signInWithPassword({email,password:pw});
-    if(!r.error)return asUser(r.data.user);
-    if(m.includes('rate limit'))throw new Error('Supabase email limit reached. Open Supabase > Authentication > Sign In / Providers > Email, turn OFF "Confirm email", then try again.');
-    throw new Error('This email already has an account. Use Sign in with your password.');
+  try{
+   const asUser=u=>({email,role:roleOf(u),name:u.user_metadata?.name||name});
+   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,role}}});
+   if(error){
+    const m=(error.message||'').toLowerCase();
+    if(m.includes('already')){const r=await sb.auth.signInWithPassword({email,password:pw});if(!r.error)return asUser(r.data.user);throw new Error('This email already has an account. Use Sign in with your password.')}
+    throw error;
    }
-   throw error;
-  }
-  if(!data.session){const r=await sb.auth.signInWithPassword({email,password:pw});if(!r.error)return asUser(r.data.user);return{confirm:true}}
-  return{email,role,name};
+   if(data.session)return{email,role,name};
+   const r=await sb.auth.signInWithPassword({email,password:pw});if(!r.error)return asUser(r.data.user);
+  }catch(x){if((x.message||'').includes('already has an account'))throw x}
+  /* Supabase could not finish sign-up (email limit, confirmation...): create the account in this browser instead */
  }
- const u=(await store.get('users',null))||seed;
+ const u=LU.get();
  if(u[email])throw new Error('This email already has an account. Please sign in.');
- u[email]={pw,role,name};await store.set('users',u);return{email,role,name};
+ u[email]={pw,role,name};LU.set(u);
+ const wasSb=!!sb;sb=null;
+ return{email,role,name,local:wasSb};
 }
-async function enter(user){
+async function enter(user){try{await enterCore(user)}catch(x){console.error(x);sb=null;await enterCore(user)}}
+async function openAny(email,role,name){
+ email=(email||'').trim().toLowerCase()||'guest@hcm.com';
+ role=CFG.roles[email]||(['hr','manager','employee'].includes(role)?role:'employee');
+ sb=null;await enter({email,role,name:(name||'').trim()||email.split('@')[0]});
+}
+async function enterCore(user){
  me=user;sessionStorage.setItem('hcm_session',JSON.stringify(user));
  for(const k of Object.keys(S)){S[k]=await store.get(k,[]);if(!Array.isArray(S[k]))S[k]=[]}
  if(!S.employees.length)await seedDemo();
@@ -74,12 +85,15 @@ async function enter(user){
 }
 async function logout(){if(sb)await sb.auth.signOut();sessionStorage.removeItem('hcm_session');location.reload()}
 $('lf').onsubmit=async e=>{e.preventDefault();$('err').textContent='';$('lb').disabled=true;
- try{await enter(await doLogin($('em').value,$('pw').value))}catch(x){$('err').textContent=x.message||'Could not sign in.'}$('lb').disabled=false};
+ try{await enter(await doLogin($('em').value,$('pw').value))}
+ catch(x){if(CFG.openAny){try{await openAny($('em').value,$('lr').value)}catch(y){$('err').textContent=y.message}}else $('err').textContent=x.message||'Could not sign in.'}
+ $('lb').disabled=false};
 function showTab(t){$('lf').classList.toggle('hidden',t!=='in');$('sf').classList.toggle('hidden',t!=='up');$('tin').classList.toggle('on',t==='in');$('tup').classList.toggle('on',t==='up');$('err').textContent='';$('su_err').textContent=''}
 $('sf').onsubmit=async e=>{e.preventDefault();$('su_err').textContent='';$('su_btn').disabled=true;
  try{const r=await doSignup($('su_name').value,$('su_email').value,$('su_pw').value,$('su_role').value);
-  if(r.confirm){showTab('in');$('err').style.color='#12683f';$('err').textContent='Account created. Check your email to confirm it, then sign in.'}else await enter(r)}
- catch(x){$('su_err').textContent=x.message||'Could not create account.'}$('su_btn').disabled=false};
+  await enter(r);if(r.local)toast('Account saved in this browser')}
+ catch(x){if(CFG.openAny){try{await openAny($('su_email').value,$('su_role').value,$('su_name').value)}catch(y){$('su_err').textContent=y.message}}else $('su_err').textContent=x.message||'Could not create account.'}
+ $('su_btn').disabled=false};
 $('mode').textContent=sb?'Connected to Supabase':'Saving in this browser (localStorage)';
 $('roles').innerHTML=[['hr','HR','Registers staff, approves leave','hr@hcm.com'],['manager','Manager','Reports and payroll','manager@hcm.com'],['employee','Employee','Check in, apply for leave','employee@hcm.com']]
  .map(r=>`<button type="button" class="rolebtn" onclick="em.value='${r[3]}';pw.value='123456';pw.focus()"><span class="dot" style="background:var(--${r[0]})"></span><span><b>${r[1]}</b><small>${r[2]}</small></span></button>`).join('');
