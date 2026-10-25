@@ -39,7 +39,7 @@ async function doLogin(email,pw){
 async function enter(user){
  me=user;localStorage.setItem('hcm_session',JSON.stringify(user));
  for(const k of Object.keys(S))S[k]=await store.get(k,[]);
- if(!(await store.get('seeded',false)))await seedDemo();
+ if(!S.employees.length)await seedDemo();
  page='dash';$('login').classList.add('hidden');$('app').classList.remove('hidden');
  document.documentElement.style.setProperty('--acc',`var(--${me.role})`);
  $('badge').textContent={hr:'HR',manager:'Manager',employee:'Employee'}[me.role];
@@ -192,44 +192,68 @@ function calcPay(m){
 async function finalize(){const m=$('pm').value;if(!confirm('Finalize '+m+'? It cannot be edited afterwards.'))return;
  S.payroll.push({month:m,rows:calcPay(m),by:me.email});await save('payroll');toast('Payroll finalized');draw()}
 
-/* ===== demo data ===== */
+/* ===== demo data (24 employees, 70 days of attendance, leaves, payroll) ===== */
 const DEMO=[
 ['Ayesha Khan','employee@hcm.com','Engineering','Frontend Developer',90000,'2025-02-10'],
 ['Bilal Ahmed','bilal@hcm.com','Engineering','Backend Developer',95000,'2024-11-01'],
+['Hassan Ali','hassan@hcm.com','Engineering','Full Stack Developer',110000,'2024-03-12'],
+['Noor Fatima','noor@hcm.com','Engineering','QA Engineer',75000,'2025-01-20'],
+['Daniyal Sheikh','daniyal@hcm.com','Engineering','DevOps Engineer',120000,'2023-10-02'],
+['Hira Aslam','hira@hcm.com','Engineering','Mobile Developer',100000,'2024-06-17'],
+['Talha Mehmood','talha@hcm.com','Engineering','Junior Developer',55000,'2025-09-01'],
 ['Sana Malik','sana@hcm.com','Design','UI Designer',70000,'2025-03-17'],
-['Hamza Raza','hamza@hcm.com','Sales','Sales Executive',60000,'2025-06-02'],
-['Mariam Siddiqui','mariam@hcm.com','HR','HR Officer',65000,'2024-09-15'],
-['Usman Tariq','usman@hcm.com','Sales','Sales Lead',85000,'2024-05-20'],
 ['Zara Hussain','zara@hcm.com','Design','Brand Designer',72000,'2025-08-11'],
-['Faisal Iqbal','faisal@hcm.com','Finance','Accountant',78000,'2024-07-08']];
+['Imran Qureshi','imran@hcm.com','Design','UX Researcher',80000,'2024-04-22'],
+['Laiba Noman','laiba@hcm.com','Design','Motion Designer',68000,'2025-05-26'],
+['Hamza Raza','hamza@hcm.com','Sales','Sales Executive',60000,'2025-06-02'],
+['Usman Tariq','usman@hcm.com','Sales','Sales Lead',85000,'2024-05-20'],
+['Maham Javed','maham@hcm.com','Sales','Account Manager',78000,'2024-08-05'],
+['Rizwan Bhatti','rizwan@hcm.com','Sales','Sales Executive',58000,'2025-10-06'],
+['Anum Farooq','anum@hcm.com','Sales','Business Developer',72000,'2024-12-09'],
+['Mariam Siddiqui','mariam@hcm.com','HR','HR Officer',65000,'2024-09-15'],
+['Kamran Yousuf','kamran@hcm.com','HR','Recruiter',62000,'2025-04-14'],
+['Faisal Iqbal','faisal@hcm.com','Finance','Accountant',78000,'2024-07-08'],
+['Rabia Anwar','rabia@hcm.com','Finance','Finance Analyst',88000,'2024-02-19'],
+['Shahzaib Khan','shahzaib@hcm.com','Finance','Payroll Officer',66000,'2025-07-21'],
+['Saad Mirza','saad@hcm.com','Operations','Operations Manager',115000,'2023-08-14'],
+['Iqra Butt','iqra@hcm.com','Operations','Admin Officer',52000,'2025-02-24'],
+['Adeel Rauf','adeel@hcm.com','Operations','Support Agent',48000,'2025-11-03']];
 const off=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
 const hh=(a,b)=>+(((+b.slice(0,2)*60+ +b.slice(3))-(+a.slice(0,2)*60+ +a.slice(3)))/60).toFixed(1);
+/* [employee number, type, start offset, end offset, reason, status, HR comment] */
+const LV=[
+[5,'casual',0,1,'Family visit','approved',''],[9,'sick',-1,1,'Fever and flu','approved','Get well soon'],
+[12,'annual',-2,3,'Cousin wedding','approved','Enjoy'],[17,'casual',0,0,'Bank work','approved',''],
+[3,'sick',-1,0,'Migraine','approved',''],[21,'annual',-1,2,'Family trip','approved',''],
+[1,'casual',-14,-13,'Family event','approved','Enjoy'],[2,'sick',-8,-7,'Fever','approved','Get well soon'],
+[6,'annual',-25,-21,'Umrah','approved','Safe travels'],[14,'unpaid',-20,-19,'Visa appointment','approved',''],
+[8,'casual',-10,-10,'Personal work','approved',''],[11,'sick',-16,-15,'Dental surgery','approved',''],
+[19,'annual',-35,-31,'Holiday','approved',''],[4,'casual',-5,-5,'Plumber at home','approved',''],
+[13,'annual',8,12,'Trip to Hunza','pending',''],[7,'casual',3,3,'Passport office','pending',''],
+[16,'sick',2,3,'Doctor appointment','pending',''],[22,'annual',10,14,'Sister wedding','pending',''],
+[10,'casual',5,6,'Moving house','pending',''],[15,'annual',-30,-28,'Holiday','rejected','Project deadline, please reschedule'],
+[20,'casual',-12,-12,'Personal','rejected','Short staff that day'],[24,'unpaid',-3,-2,'Family matter','approved','']];
 async function seedDemo(){
  S.employees=DEMO.map((r,i)=>({id:'e'+(i+1),code:'EMP-'+String(i+1).padStart(3,'0'),name:r[0],email:r[1],dept:r[2],designation:r[3],basic:r[4],joined:r[5]}));
- S.leaves=[
-  {id:'l1',eid:'e1',type:'casual',start:off(-12),end:off(-11),reason:'Family event',status:'approved',comment:'Enjoy'},
-  {id:'l2',eid:'e2',type:'sick',start:off(-6),end:off(-5),reason:'Fever',status:'approved',comment:'Get well soon'},
-  {id:'l3',eid:'e4',type:'annual',start:off(8),end:off(12),reason:'Trip to Hunza',status:'pending',comment:''},
-  {id:'l4',eid:'e3',type:'casual',start:off(3),end:off(3),reason:'Personal work',status:'pending',comment:''},
-  {id:'l5',eid:'e6',type:'unpaid',start:off(-20),end:off(-19),reason:'Visa appointment',status:'approved',comment:''},
-  {id:'l6',eid:'e7',type:'annual',start:off(-30),end:off(-28),reason:'Holiday',status:'rejected',comment:'Project deadline, please reschedule'},
-  {id:'l7',eid:'e5',type:'casual',start:off(0),end:off(2),reason:'Family visit',status:'approved',comment:''}];
+ S.leaves=LV.map((r,i)=>({id:'l'+(i+1),eid:'e'+r[0],type:r[1],start:off(r[2]),end:off(r[3]),reason:r[4],status:r[5],comment:r[6]}));
  S.leaves.forEach(l=>l.days=workdays(l.start,l.end));
  S.attendance=[];
  S.employees.forEach((e,i)=>{for(let n=-70;n<=0;n++){
   const date=off(n),d=new Date(date+'T00:00');
-  if(!isWork(d)||date<e.joined||onLeave(e.id,date))continue;
+  if((!isWork(d)&&n<0)||date<e.joined||onLeave(e.id,date))continue;
   if(n===0&&e.email==='employee@hcm.com')continue;
   const r=(i*7+(n+100)*13)%11;let tin,tout,st;
   if(r<7){tin='09:0'+r;tout='17:'+String(10+r*4).padStart(2,'0');st='present'}
   else if(r<9){tin='09:'+(20+r);tout='17:45';st='late'}
   else if(r===9){tin='09:05';tout='13:40';st='half_day'}
-  else{if(n<0)continue;tin='09:02';tout=null;st='present'}
+  else continue;
   if(n===0){tout=null;if(st==='half_day')st='present'}
   S.attendance.push({id:uid(),eid:e.id,date,in:tin,out:tout,hours:tout?hh(tin,tout):null,status:st});
  }});
- S.notes=[{title:'Welcome to HCM Lite',body:'Check in every morning and apply for leave from the My leave page.',by:'hr',date:off(-14)},
-  {title:'Office closed on Friday',body:'The office will stay closed for the public holiday. Please plan your work.',by:'manager',date:off(-2)}];
+ S.notes=[{title:'Welcome to HCM Lite',body:'Check in every morning and apply for leave from the My leave page.',by:'hr',date:off(-30)},
+  {title:'Eid holiday schedule',body:'The office will stay closed for the public holiday. Please plan your work before the break.',by:'manager',date:off(-9)},
+  {title:'Fire drill on Thursday',body:'A short fire drill will take place at 11:00. Please follow the instructions of your floor warden.',by:'hr',date:off(-4)},
+  {title:'Payroll cut-off',body:'Please submit any attendance corrections to HR before the last working day of the month.',by:'manager',date:off(-2)}];
  const t=new Date(),pm=ymd(new Date(t.getFullYear(),t.getMonth()-1,1)).slice(0,7);
  S.payroll=[{month:pm,rows:calcPay(pm),by:'manager@hcm.com'}];
  for(const k of Object.keys(S))await save(k);
@@ -238,8 +262,6 @@ async function seedDemo(){
 }
 async function resetDemo(){if(!confirm('Replace all data with demo data?'))return;await seedDemo();toast('Demo data loaded');draw()}
 
-/* restore session */
-(async()=>{
- if(sb){const{data}=await sb.auth.getSession();const em=data.session?.user?.email;if(em)enter({email:em,role:CFG.roles[em]||'employee'})}
- else{try{const s=JSON.parse(localStorage.getItem('hcm_session'));if(s)enter(s)}catch{}}
-})();
+/* page always opens on the sign-in screen; old sessions are cleared */
+localStorage.removeItem('hcm_session');
+if(sb)sb.auth.signOut();
