@@ -3,11 +3,15 @@
 const CFG={openAny:true,url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}};
 let sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.key,{auth:{storage:window.sessionStorage}}):null;
 
+/* T = give up on a slow/hanging call after ms; V = read a field safely */
+const T=(p,ms=3000)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
+const V=id=>{const e=document.getElementById(id);return e?e.value:''};
+
 /* ===== storage: Supabase table hcm_kv(k text primary key, v jsonb) or localStorage ===== */
 const store={
- async get(k,d){ if(sb){try{const{data,error}=await sb.from('hcm_kv').select('v').eq('k',k).maybeSingle();if(error)throw error;return data?data.v:d}catch(x){if(!store.warned){store.warned=1;setTimeout(()=>toast('Supabase read failed: '+(x.message||x)),300)}return d}}
+ async get(k,d){ if(sb){try{const{data,error}=await T(sb.from('hcm_kv').select('v').eq('k',k).maybeSingle(),3000);if(error)throw error;return data?data.v:d}catch(x){store.dead=1;if(!store.warned){store.warned=1;setTimeout(()=>toast('Supabase read failed: '+(x.message||x)),300)}return d}}
   try{return JSON.parse(localStorage.getItem('hcm_'+k))??d}catch{return d} },
- async set(k,v){ if(sb){try{const{error}=await sb.from('hcm_kv').upsert({k,v});if(error)throw error}catch(x){toast('Supabase save failed: '+(x.message||x))}}else localStorage.setItem('hcm_'+k,JSON.stringify(v)) }
+ async set(k,v){ if(sb){try{const{error}=await T(sb.from('hcm_kv').upsert({k,v}),3000);if(error)throw error}catch(x){toast('Supabase save failed: '+(x.message||x))}}else localStorage.setItem('hcm_'+k,JSON.stringify(v)) }
 };
 const S={employees:[],attendance:[],leaves:[],notes:[],payroll:[]};
 const save=k=>store.set(k,S[k]);
@@ -75,7 +79,8 @@ async function openAny(email,role,name){
 }
 async function enterCore(user){
  me=user;sessionStorage.setItem('hcm_session',JSON.stringify(user));
- for(const k of Object.keys(S)){S[k]=await store.get(k,[]);if(!Array.isArray(S[k]))S[k]=[]}
+ await Promise.all(Object.keys(S).map(async k=>{S[k]=await store.get(k,[]);if(!Array.isArray(S[k]))S[k]=[]}));
+ if(store.dead&&sb){sb=null;await Promise.all(Object.keys(S).map(async k=>{S[k]=await store.get(k,[]);if(!Array.isArray(S[k]))S[k]=[]}))}
  if(!S.employees.length)await seedDemo();
  if(me.role==='employee'&&!S.employees.some(e=>e.email===me.email)){S.employees.push({id:uid(),code:'EMP-'+String(S.employees.length+1).padStart(3,'0'),name:me.name||me.email.split('@')[0],email:me.email,dept:'General',designation:'Staff',basic:40000,joined:today()});await save('employees')}
  page='dash';$('login').classList.add('hidden');$('app').classList.remove('hidden');
@@ -85,14 +90,14 @@ async function enterCore(user){
 }
 async function logout(){if(sb)await sb.auth.signOut();sessionStorage.removeItem('hcm_session');location.reload()}
 $('lf').onsubmit=async e=>{e.preventDefault();$('err').textContent='';$('lb').disabled=true;
- try{await enter(await doLogin($('em').value,$('pw').value))}
- catch(x){if(CFG.openAny){try{await openAny($('em').value,$('lr').value)}catch(y){$('err').textContent=y.message}}else $('err').textContent=x.message||'Could not sign in.'}
+ try{await enter(await T(doLogin(V('em'),V('pw')),3000))}
+ catch(x){if(CFG.openAny){try{await openAny(V('em'),V('lr'))}catch(y){$('err').textContent=y.message}}else $('err').textContent=x.message||'Could not sign in.'}
  $('lb').disabled=false};
 function showTab(t){$('lf').classList.toggle('hidden',t!=='in');$('sf').classList.toggle('hidden',t!=='up');$('tin').classList.toggle('on',t==='in');$('tup').classList.toggle('on',t==='up');$('err').textContent='';$('su_err').textContent=''}
 $('sf').onsubmit=async e=>{e.preventDefault();$('su_err').textContent='';$('su_btn').disabled=true;
- try{const r=await doSignup($('su_name').value,$('su_email').value,$('su_pw').value,$('su_role').value);
+ try{const r=await T(doSignup(V('su_name'),V('su_email'),V('su_pw'),V('su_role')),3000);
   await enter(r);if(r.local)toast('Account saved in this browser')}
- catch(x){if(CFG.openAny){try{await openAny($('su_email').value,$('su_role').value,$('su_name').value)}catch(y){$('su_err').textContent=y.message}}else $('su_err').textContent=x.message||'Could not create account.'}
+ catch(x){if(CFG.openAny){try{await openAny(V('su_email'),V('su_role'),V('su_name'))}catch(y){$('su_err').textContent=y.message}}else $('su_err').textContent=x.message||'Could not create account.'}
  $('su_btn').disabled=false};
 $('mode').textContent=sb?'Connected to Supabase':'Saving in this browser (localStorage)';
 $('roles').innerHTML=[['hr','HR','Registers staff, approves leave','hr@hcm.com'],['manager','Manager','Reports and payroll','manager@hcm.com'],['employee','Employee','Check in, apply for leave','employee@hcm.com']]
@@ -303,7 +308,7 @@ async function seedDemo(){
   {title:'Payroll cut-off',body:'Please submit any attendance corrections to HR before the last working day of the month.',by:'manager',date:off(-2)}];
  const t=new Date(),pm=ymd(new Date(t.getFullYear(),t.getMonth()-1,1)).slice(0,7);
  S.payroll=[{month:pm,rows:calcPay(pm),by:'manager@hcm.com'}];
- for(const k of Object.keys(S))await save(k);
+ await Promise.all(Object.keys(S).map(k=>save(k)));
  if(!sb){const u=await store.get('users',seed);DEMO.forEach(r=>{if(!u[r[1]])u[r[1]]={pw:'Temp@123',role:'employee'}});await store.set('users',u)}
  await store.set('seeded',true);
 }
@@ -312,3 +317,5 @@ async function resetDemo(){if(!confirm('Replace all data with demo data?'))retur
 /* page always opens on the sign-in screen; old sessions are cleared */
 sessionStorage.removeItem('hcm_session');
 if(sb)sb.auth.signOut();
+
+{const v=document.getElementById('ver');if(v)v.textContent=' · script v6'}
