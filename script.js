@@ -1,6 +1,6 @@
 /* ===== CONFIG: paste Supabase URL + anon key to switch from localStorage to Supabase ===== */
-const CFG={url:'',key:'',roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}};
-const sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.key):null;
+const CFG={url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}};
+const sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.key,{auth:{storage:window.sessionStorage}}):null;
 
 /* ===== storage: Supabase table hcm_kv(k text primary key, v jsonb) or localStorage ===== */
 const store={
@@ -29,25 +29,42 @@ function used(eid,t){return S.leaves.filter(l=>l.eid===eid&&l.type===t&&l.status
 
 /* ===== auth: 3 emails -> 3 panels ===== */
 const seed={'hr@hcm.com':{pw:'123456',role:'hr'},'manager@hcm.com':{pw:'123456',role:'manager'},'employee@hcm.com':{pw:'123456',role:'employee'}};
+const roleOf=u=>{const r=u.user_metadata?.role;return['hr','manager','employee'].includes(r)?r:(CFG.roles[u.email]||'employee')};
 async function doLogin(email,pw){
  email=email.trim().toLowerCase();
- if(sb){const{error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw error;return{email,role:CFG.roles[email]||'employee'}}
+ if(sb){const{data,error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw error;
+  return{email,role:roleOf(data.user),name:data.user.user_metadata?.name}}
  let u=await store.get('users',null);if(!u){u=seed;await store.set('users',u)}
  if(!u[email]||u[email].pw!==pw)throw new Error('Wrong email or password.');
- return{email,role:u[email].role};
+ return{email,role:u[email].role,name:u[email].name};
+}
+async function doSignup(name,email,pw,role){
+ email=email.trim().toLowerCase();name=name.trim();
+ if(pw.length<6)throw new Error('Password must be at least 6 characters.');
+ if(sb){const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,role}}});if(error)throw error;
+  if(!data.session)return{confirm:true};return{email,role,name}}
+ const u=(await store.get('users',null))||seed;
+ if(u[email])throw new Error('This email already has an account. Please sign in.');
+ u[email]={pw,role,name};await store.set('users',u);return{email,role,name};
 }
 async function enter(user){
- me=user;localStorage.setItem('hcm_session',JSON.stringify(user));
+ me=user;sessionStorage.setItem('hcm_session',JSON.stringify(user));
  for(const k of Object.keys(S))S[k]=await store.get(k,[]);
  if(!S.employees.length)await seedDemo();
+ if(me.role==='employee'&&!S.employees.some(e=>e.email===me.email)){S.employees.push({id:uid(),code:'EMP-'+String(S.employees.length+1).padStart(3,'0'),name:me.name||me.email.split('@')[0],email:me.email,dept:'General',designation:'Staff',basic:40000,joined:today()});await save('employees')}
  page='dash';$('login').classList.add('hidden');$('app').classList.remove('hidden');
  document.documentElement.style.setProperty('--acc',`var(--${me.role})`);
  $('badge').textContent={hr:'HR',manager:'Manager',employee:'Employee'}[me.role];
  draw();
 }
-async function logout(){if(sb)await sb.auth.signOut();localStorage.removeItem('hcm_session');location.reload()}
+async function logout(){if(sb)await sb.auth.signOut();sessionStorage.removeItem('hcm_session');location.reload()}
 $('lf').onsubmit=async e=>{e.preventDefault();$('err').textContent='';$('lb').disabled=true;
  try{await enter(await doLogin($('em').value,$('pw').value))}catch(x){$('err').textContent=x.message||'Could not sign in.'}$('lb').disabled=false};
+function showTab(t){$('lf').classList.toggle('hidden',t!=='in');$('sf').classList.toggle('hidden',t!=='up');$('tin').classList.toggle('on',t==='in');$('tup').classList.toggle('on',t==='up');$('err').textContent='';$('su_err').textContent=''}
+$('sf').onsubmit=async e=>{e.preventDefault();$('su_err').textContent='';$('su_btn').disabled=true;
+ try{const r=await doSignup($('su_name').value,$('su_email').value,$('su_pw').value,$('su_role').value);
+  if(r.confirm){showTab('in');$('err').style.color='#12683f';$('err').textContent='Account created. Check your email to confirm it, then sign in.'}else await enter(r)}
+ catch(x){$('su_err').textContent=x.message||'Could not create account.'}$('su_btn').disabled=false};
 $('mode').textContent=sb?'Connected to Supabase':'Saving in this browser (localStorage)';
 $('roles').innerHTML=[['hr','HR','Registers staff, approves leave','hr@hcm.com'],['manager','Manager','Reports and payroll','manager@hcm.com'],['employee','Employee','Check in, apply for leave','employee@hcm.com']]
  .map(r=>`<button type="button" class="rolebtn" onclick="em.value='${r[3]}';pw.value='123456';pw.focus()"><span class="dot" style="background:var(--${r[0]})"></span><span><b>${r[1]}</b><small>${r[2]}</small></span></button>`).join('');
@@ -263,5 +280,5 @@ async function seedDemo(){
 async function resetDemo(){if(!confirm('Replace all data with demo data?'))return;await seedDemo();toast('Demo data loaded');draw()}
 
 /* page always opens on the sign-in screen; old sessions are cleared */
-localStorage.removeItem('hcm_session');
+sessionStorage.removeItem('hcm_session');
 if(sb)sb.auth.signOut();
