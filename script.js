@@ -39,6 +39,7 @@ async function doLogin(email,pw){
 async function enter(user){
  me=user;localStorage.setItem('hcm_session',JSON.stringify(user));
  for(const k of Object.keys(S))S[k]=await store.get(k,[]);
+ if(!(await store.get('seeded',false)))await seedDemo();
  page='dash';$('login').classList.add('hidden');$('app').classList.remove('hidden');
  document.documentElement.style.setProperty('--acc',`var(--${me.role})`);
  $('badge').textContent={hr:'HR',manager:'Manager',employee:'Employee'}[me.role];
@@ -66,7 +67,7 @@ const empty=t=>`<div class="empty">${t}</div>`;
 const tagFor=s=>`<span class="tag ${{present:'ok',approved:'ok',late:'warn',pending:'warn',half_day:'warn',on_leave:'ok',rejected:'bad',absent:'bad'}[s]||''}">${s.replace('_',' ')}</span>`;
 function statusOf(e,date){
  const r=S.attendance.find(a=>a.eid===e.id&&a.date===date);
- if(r)return r.status;if(onLeave(e.id,date))return'on_leave';return'absent';
+ if(r)return r.status;if(onLeave(e.id,date))return'on_leave';if(!isWork(new Date(date+'T00:00')))return'weekend';return'absent';
 }
 
 /* ===== pages ===== */
@@ -89,7 +90,7 @@ const PAGES={
    <div><label>Full name</label><input id="n" required></div><div><label>Email</label><input id="e" type="email" required></div>
    <div><label>Department</label><input id="d" required></div><div><label>Designation</label><input id="g" required></div>
    <div><label>Basic salary</label><input id="b" type="number" min="1" required></div><div><label>Joining date</label><input id="j" type="date" value="${today()}" required></div></div>
-   <div class="actions"><button class="btn">Register employee</button></div><p class="sub" style="margin:10px 0 0">Creates a login with the temporary password Temp@123.</p></form></div>`:'';
+   <div class="actions"><button class="btn">Register employee</button><button type="button" class="btn ghost" onclick="resetDemo()">Reload demo data</button></div><p class="sub" style="margin:10px 0 0">Creates a login with the temporary password Temp@123.</p></form></div>`:'';
   return head('Employees',canEdit?'Register and manage your team.':'Everyone on the team.')+form+
   `<div class="card tw">${S.employees.length?`<table><tr><th>Code</th><th>Name</th><th>Email</th><th>Department</th><th>Designation</th><th>Basic</th>${canEdit?'<th></th>':''}</tr>`+
   S.employees.map(e=>`<tr><td>${e.code}</td><td>${esc(e.name)}</td><td>${esc(e.email)}</td><td>${esc(e.dept)}</td><td>${esc(e.designation)}</td><td>${money(e.basic)}</td>${canEdit?`<td><button class="btn bad sm" onclick="delEmp('${e.id}')">Remove</button></td>`:''}</tr>`).join('')+'</table>':empty('No employees registered yet.')}</div>`;
@@ -191,13 +192,54 @@ function calcPay(m){
 async function finalize(){const m=$('pm').value;if(!confirm('Finalize '+m+'? It cannot be edited afterwards.'))return;
  S.payroll.push({month:m,rows:calcPay(m),by:me.email});await save('payroll');toast('Payroll finalized');draw()}
 
+/* ===== demo data ===== */
+const DEMO=[
+['Ayesha Khan','employee@hcm.com','Engineering','Frontend Developer',90000,'2025-02-10'],
+['Bilal Ahmed','bilal@hcm.com','Engineering','Backend Developer',95000,'2024-11-01'],
+['Sana Malik','sana@hcm.com','Design','UI Designer',70000,'2025-03-17'],
+['Hamza Raza','hamza@hcm.com','Sales','Sales Executive',60000,'2025-06-02'],
+['Mariam Siddiqui','mariam@hcm.com','HR','HR Officer',65000,'2024-09-15'],
+['Usman Tariq','usman@hcm.com','Sales','Sales Lead',85000,'2024-05-20'],
+['Zara Hussain','zara@hcm.com','Design','Brand Designer',72000,'2025-08-11'],
+['Faisal Iqbal','faisal@hcm.com','Finance','Accountant',78000,'2024-07-08']];
+const off=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
+const hh=(a,b)=>+(((+b.slice(0,2)*60+ +b.slice(3))-(+a.slice(0,2)*60+ +a.slice(3)))/60).toFixed(1);
+async function seedDemo(){
+ S.employees=DEMO.map((r,i)=>({id:'e'+(i+1),code:'EMP-'+String(i+1).padStart(3,'0'),name:r[0],email:r[1],dept:r[2],designation:r[3],basic:r[4],joined:r[5]}));
+ S.leaves=[
+  {id:'l1',eid:'e1',type:'casual',start:off(-12),end:off(-11),reason:'Family event',status:'approved',comment:'Enjoy'},
+  {id:'l2',eid:'e2',type:'sick',start:off(-6),end:off(-5),reason:'Fever',status:'approved',comment:'Get well soon'},
+  {id:'l3',eid:'e4',type:'annual',start:off(8),end:off(12),reason:'Trip to Hunza',status:'pending',comment:''},
+  {id:'l4',eid:'e3',type:'casual',start:off(3),end:off(3),reason:'Personal work',status:'pending',comment:''},
+  {id:'l5',eid:'e6',type:'unpaid',start:off(-20),end:off(-19),reason:'Visa appointment',status:'approved',comment:''},
+  {id:'l6',eid:'e7',type:'annual',start:off(-30),end:off(-28),reason:'Holiday',status:'rejected',comment:'Project deadline, please reschedule'},
+  {id:'l7',eid:'e5',type:'casual',start:off(0),end:off(2),reason:'Family visit',status:'approved',comment:''}];
+ S.leaves.forEach(l=>l.days=workdays(l.start,l.end));
+ S.attendance=[];
+ S.employees.forEach((e,i)=>{for(let n=-70;n<=0;n++){
+  const date=off(n),d=new Date(date+'T00:00');
+  if(!isWork(d)||date<e.joined||onLeave(e.id,date))continue;
+  if(n===0&&e.email==='employee@hcm.com')continue;
+  const r=(i*7+(n+100)*13)%11;let tin,tout,st;
+  if(r<7){tin='09:0'+r;tout='17:'+String(10+r*4).padStart(2,'0');st='present'}
+  else if(r<9){tin='09:'+(20+r);tout='17:45';st='late'}
+  else if(r===9){tin='09:05';tout='13:40';st='half_day'}
+  else{if(n<0)continue;tin='09:02';tout=null;st='present'}
+  if(n===0){tout=null;if(st==='half_day')st='present'}
+  S.attendance.push({id:uid(),eid:e.id,date,in:tin,out:tout,hours:tout?hh(tin,tout):null,status:st});
+ }});
+ S.notes=[{title:'Welcome to HCM Lite',body:'Check in every morning and apply for leave from the My leave page.',by:'hr',date:off(-14)},
+  {title:'Office closed on Friday',body:'The office will stay closed for the public holiday. Please plan your work.',by:'manager',date:off(-2)}];
+ const t=new Date(),pm=ymd(new Date(t.getFullYear(),t.getMonth()-1,1)).slice(0,7);
+ S.payroll=[{month:pm,rows:calcPay(pm),by:'manager@hcm.com'}];
+ for(const k of Object.keys(S))await save(k);
+ if(!sb){const u=await store.get('users',seed);DEMO.forEach(r=>{if(!u[r[1]])u[r[1]]={pw:'Temp@123',role:'employee'}});await store.set('users',u)}
+ await store.set('seeded',true);
+}
+async function resetDemo(){if(!confirm('Replace all data with demo data?'))return;await seedDemo();toast('Demo data loaded');draw()}
+
 /* restore session */
 (async()=>{
  if(sb){const{data}=await sb.auth.getSession();const em=data.session?.user?.email;if(em)enter({email:em,role:CFG.roles[em]||'employee'})}
  else{try{const s=JSON.parse(localStorage.getItem('hcm_session'));if(s)enter(s)}catch{}}
 })();
-const cfg={
-  url:'https://fehjjgdxgwggzqfkzyxu.supabase.co',
-  key:'sb_publishable_YCvVYkJlKI9XXX6sJcosoQ_doh-vLvR',
-  roles:{'hr@hcm.com':'hr','manager@hcm.com':'manager','employee@hcm.com':'employee'}
-};
