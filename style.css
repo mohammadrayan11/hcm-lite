@@ -1,3 +1,4 @@
+:root{--ink:#14202e;--ink2:#1d2d40;--bg:#f2f5f8;--card:#fff;--line:#e2e8ef;--mut:#6b7a8c;--hr:#0e9f8e;--manager:#5b4fcf;--employee:#e8912d;--acc:var(--hr);--bad:#d64545;--ok:#1f9d63}
 *{box-sizing:border-box;margin:0}
 body{font:15px/1.5 "Plus Jakarta Sans",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 button,input,select,textarea{font:inherit}
