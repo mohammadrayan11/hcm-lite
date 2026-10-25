@@ -3,7 +3,7 @@
 <title>HCM Lite</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<link rel="stylesheet" href="style.css?v=4"></head><body>
+<link rel="stylesheet" href="style.css?v=5"></head><body>
 
 <section id="login">
  <div class="brand">
@@ -13,15 +13,16 @@
  <div class="formside"><div class="formbox">
   <h2>Welcome</h2><span class="mode" id="mode"></span>
   <div class="tabs"><button type="button" id="tin" class="on" onclick="showTab('in')">Sign in</button><button type="button" id="tup" onclick="showTab('up')">Create account</button></div>
-  <form id="lf">
-   <label for="em">Email</label><input id="em" type="email" required autocomplete="username" placeholder="you@company.com">
-   <label for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
+  <form id="lf" novalidate>
+   <label for="em">Email</label><input id="em" type="email" autocomplete="username" placeholder="you@company.com">
+   <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+   <label for="lr">Open as (used if the email is new)</label><select id="lr"><option value="employee">Employee</option><option value="hr">HR</option><option value="manager">Manager</option></select>
    <button class="btn full" id="lb">Sign in</button><div class="err" id="err" role="alert"></div>
   </form>
-  <form id="sf" class="hidden">
-   <label for="su_name">Full name</label><input id="su_name" required autocomplete="name">
-   <label for="su_email">Email</label><input id="su_email" type="email" required autocomplete="username" placeholder="you@company.com">
-   <label for="su_pw">Password (6+ characters)</label><input id="su_pw" type="password" minlength="6" required autocomplete="new-password">
+  <form id="sf" class="hidden" novalidate>
+   <label for="su_name">Full name</label><input id="su_name" autocomplete="name">
+   <label for="su_email">Email</label><input id="su_email" type="email" autocomplete="username" placeholder="you@company.com">
+   <label for="su_pw">Password (6+ characters)</label><input id="su_pw" type="password" autocomplete="new-password">
    <label for="su_role">I am a</label><select id="su_role"><option value="employee">Employee</option><option value="hr">HR</option><option value="manager">Manager</option></select>
    <button class="btn full" id="su_btn">Create account</button><div class="err" id="su_err" role="alert"></div>
   </form>
@@ -34,5 +35,5 @@
 </div>
 <div id="toast"></div>
 
-<script src="script.js?v=4"></script>
+<script src="script.js?v=5"></script>
 </body></html>
