@@ -10,12 +10,22 @@
   <div><h1>HCM Lite</h1><p>People, attendance, leave and payroll for one small team. Sign in with your work email to open your own panel.</p></div>
   <div class="roles" id="roles"></div>
 </div>
- <div class="formside"><form class="formbox" id="lf">
-  <h2>Sign in</h2><span class="mode" id="mode"></span>
-  <label for="em">Email</label><input id="em" type="email" required autocomplete="username" placeholder="you@company.com">
-  <label for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
-  <button class="btn full" id="lb">Sign in</button><div class="err" id="err" role="alert"></div>
- </form></div>
+ <div class="formside"><div class="formbox">
+  <h2>Welcome</h2><span class="mode" id="mode"></span>
+  <div class="tabs"><button type="button" id="tin" class="on" onclick="showTab('in')">Sign in</button><button type="button" id="tup" onclick="showTab('up')">Create account</button></div>
+  <form id="lf">
+   <label for="em">Email</label><input id="em" type="email" required autocomplete="username" placeholder="you@company.com">
+   <label for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password">
+   <button class="btn full" id="lb">Sign in</button><div class="err" id="err" role="alert"></div>
+  </form>
+  <form id="sf" class="hidden">
+   <label for="su_name">Full name</label><input id="su_name" required autocomplete="name">
+   <label for="su_email">Email</label><input id="su_email" type="email" required autocomplete="username" placeholder="you@company.com">
+   <label for="su_pw">Password (6+ characters)</label><input id="su_pw" type="password" minlength="6" required autocomplete="new-password">
+   <label for="su_role">I am a</label><select id="su_role"><option value="employee">Employee</option><option value="hr">HR</option><option value="manager">Manager</option></select>
+   <button class="btn full" id="su_btn">Create account</button><div class="err" id="su_err" role="alert"></div>
+  </form>
+ </div></div>
 </section>
 
 <div id="app" class="hidden">
